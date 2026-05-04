@@ -1,13 +1,13 @@
 # Vehicle -> OCU (System monitoring purposes)
 # Type 0 = long (int64), Type 2 = double (float64), Type 4 = string
 
-float64 AutoGpsHead
-float64 AutoGpsLat
-float64 AutoGpsLon
-float64 AutoGpsVel
-int64   AutoGpsReferences
-int64   AutoGpsQuality
-float64 AutoGpsStamp
+float64 auto_gps_head
+float64 auto_gps_lat
+float64 auto_gps_lon
+float64 auto_gps_vel
+int64   auto_gps_references
+int64   auto_gps_quality
+float64 auto_gps_stamp
 int64   pause
 int64   key_on
 int64   eng_enb
@@ -24,8 +24,8 @@ int64   veh_estop
 int64   veh_obstacle
 float64 vehicle_bat
 string  run_composite
-string  VehicleName
-int64   Health_total
+string  vehicle_name
+int64   health_total
 int64   rpm
 int64   fuel
 float64 sys_thd

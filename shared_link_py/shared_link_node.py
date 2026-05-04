@@ -85,6 +85,18 @@ class SharedLinkInbound:
     fuel:              SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
     sys_thd:           SVField = field(default_factory=lambda: SVField(type=TYPE.FLOAT))
 
+INBOUND_TO_ROS = {
+    'AutoGpsHead':       'auto_gps_head',
+    'AutoGpsLat':        'auto_gps_lat',
+    'AutoGpsLon':        'auto_gps_lon',
+    'AutoGpsVel':        'auto_gps_vel',
+    'AutoGpsReferences': 'auto_gps_references',
+    'AutoGpsQuality':    'auto_gps_quality',
+    'AutoGpsStamp':      'auto_gps_stamp',
+    'VehicleName':       'vehicle_name',
+    'Health_total':      'health_total',
+}
+
 class SharedLinkNode(Node):
     def __init__(self):
         super().__init__('shared_link_node')
@@ -119,8 +131,8 @@ class SharedLinkNode(Node):
         ros_msg = KairosValues()
         for f in fields(self._inbound):
             sv: SVField = getattr(self._inbound, f.name)
-            if sv.value is not None:
-                setattr(ros_msg, f.name, sv.value)
+            ros_field = INBOUND_TO_ROS.get(f.name, f.name) # Swaps for ROS name, or leaves as is if not on list
+            setattr(ros_msg, ros_field, sv.value)
         self._kairos_pub.publish(ros_msg)
 
     ### SUBSCRIBERS
