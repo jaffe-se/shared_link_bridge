@@ -24,6 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'shared_link_node = shared_link_py.shared_link_node:main',
+            'template_node = shared_link_py.template_node:main',
         ],
     },
 )
