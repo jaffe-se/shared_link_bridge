@@ -9,6 +9,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/KairosValues.msg"
   "msg/VehicleControl.msg"
   "srv/GetVehicleControl.srv"
+  "srv/SetEStopState.srv"
 )
 
 ament_python_install_package(${PROJECT_NAME})
@@ -16,6 +17,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   shared_link_py/shared_link_node.py
   shared_link_py/template_node.py
+  shared_link_py/estop_beacon.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

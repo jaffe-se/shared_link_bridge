@@ -3,14 +3,16 @@ import threading
 
 def default_on_recv(data_raw, addr):
     data = data_raw.decode()
-    
+
     print(f"From: {addr[0]} / {addr[1]}")
     print(f"Data: {data}")
 
 class UdpConnection:
-    def __init__(self, remote_ip: str, remote_port: int, local_port: int, on_recv: callable = default_on_recv, timeout: float = 1.0):
+    def __init__(self, remote_ip: str, remote_port: int, local_port: int, on_recv: callable = default_on_recv, timeout: float = 1.0, broadcast: bool = False):
         self._stop_event = threading.Event()
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if broadcast:
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self._socket.bind(('', local_port))
         self._socket.settimeout(timeout)
 
@@ -18,7 +20,7 @@ class UdpConnection:
         # ^^^
         # alternative to threading solution, but this requires callling a receive method on repeat, checking if there is anything
         # threading allows the on_recv function to be called any time there is a new message
-        
+
         self._buffer_size = 4096
 
         self._on_recv = on_recv
@@ -36,11 +38,14 @@ class UdpConnection:
     def _loop(self):
         while not self._stop_event.is_set():
             try:
-                data, addr = self._sock.recvfrom(self._buffer_size)
+                data, addr = self._socket.recvfrom(self._buffer_size)
                 self._on_recv(data, addr)
             except socket.timeout:
                 continue
-        self._sock.close()
+        self._socket.close()
 
     def send(self, msg: str):
         self._socket.sendto(msg.encode(), self._remote_addr)
+
+    def send_bytes(self, data: bytes):
+        self._socket.sendto(data, self._remote_addr)

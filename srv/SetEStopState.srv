@@ -1,0 +1,3 @@
+# Set the EStop source state: 0=ESTOP, 1=PAUSE, 2=RUN
+int8 state
+---
