@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, fields
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import String, Empty
 
 from shared_link_py.msg import KairosValues, VehicleControl
 from shared_link_py.srv import GetVehicleControl
@@ -105,7 +105,7 @@ class SharedLinkNode(Node):
 
         self._field_update_sub = self.create_subscription(
             String, 'field_update',
-            self.parse_individual_field_update, 10)
+            self._field_update_callback, 10)
 
         self._update_timer = self.create_timer(self._update_rate, self._timer_callback)
 
@@ -129,7 +129,7 @@ class SharedLinkNode(Node):
             sv: SVField = getattr(self._outbound, f.name)
             sv.apply(str(getattr(msg, f.name)))
 
-    def parse_individual_field_update(self, msg: String):
+    def _field_update_callback(self, msg: String):
         raw = msg.data
         if ':' not in raw:
             return
@@ -139,6 +139,7 @@ class SharedLinkNode(Node):
             return
         sv.apply(value_str)
 
+
     ### SERVICES
     def _get_vehicle_control_callback(self, request, response: GetVehicleControl.Response):
         for f in fields(self._outbound):
@@ -146,6 +147,17 @@ class SharedLinkNode(Node):
             if sv.value is not None:
                 setattr(response.control, f.name, sv.value)
         return response
+
+    def _connect_callback(self, request, response: Empty.response):
+        self.sendMsg(declare_myIP_msg)
+        self.sendMsgs(enab_msgs)
+        self.sendMsgs(list_SVs_msgs)
+        self.sendMsg(teleop_start)
+        
+    def _disconnect_callback(self, request, response: Empty.response):
+        self.sendMsg(teleop_start)
+        self.sendMsgs(term_msgs)
+
 
     ### TIMER
     def _timer_callback(self):
@@ -159,7 +171,7 @@ class SharedLinkNode(Node):
     # -------------- #
     #      UDP
     # -------------- #
-    ### ON RECIEVE
+    ### ON RECEIVE
     def _msg_parser(self, data_raw, addr):
         # was getting error that it couldn't decode xff, but it also wasn't
         if data_raw[1:4] == b'\xff\xd8\xff':
@@ -206,8 +218,7 @@ class SharedLinkNode(Node):
             else:
                 msg += 'D|'
         msg += 'C'
-        msg = self.prep_for_send(msg)
-        self._udp.send(msg)
+        self.sendMsg(msg)
 
     # -------------- #
     #    INTERNALS
@@ -224,11 +235,20 @@ class SharedLinkNode(Node):
         return None
 
     ### Utilities
+
+    def sendMsg(self, msg: str) -> None:
+        self._udp.send(self._prep_for_send(msg))
+    
+    def sendMsgs(self, msgs: list):
+        for msg in msgs:
+            self.sendMsg(msg)
+
     def get_checksum(self, s: str) -> str:
         return f'{sum(ord(c) for c in s) % 0x100:X}'
-
-    def prep_for_send(self, msg: str) -> str:
+    
+    def _prep_for_send(self, msg: str) -> str:
         return f"[{msg}{self.get_checksum(msg)}]"
+    
 
 
 def main(args=None):
