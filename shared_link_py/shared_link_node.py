@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Union
 
 from enum import Enum
@@ -5,10 +6,9 @@ from dataclasses import dataclass, field, fields
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Empty
-
+from std_msgs.msg import String
 from shared_link_py.msg import KairosValues, VehicleControl
-from shared_link_py.srv import GetVehicleControl
+from shared_link_py.srv import GetVehicleControl, SendMsgSet
 
 from UDPConnection import UdpConnection
 from premade_msgs import *
@@ -107,9 +107,15 @@ class SharedLinkNode(Node):
 
         self._kairos_pub = self.create_publisher(KairosValues, 'kairos_values', 10)
 
+        self._outbound_pub = self.create_publisher(String, 'outbound_msgs', 10)
+
         self._get_ctrl_srv = self.create_service(
             GetVehicleControl, 'get_vehicle_control',
             self._get_vehicle_control_callback)
+        
+        self._send_msg_set_srv = self.create_service(
+            SendMsgSet, 'send_msg_set',
+            self._send_msg_set_callback)
 
         self._vehicle_ctrl_sub = self.create_subscription(
             VehicleControl, 'vehicle_control',
@@ -123,6 +129,8 @@ class SharedLinkNode(Node):
 
         self._inbound_count = 0
 
+        self.get_logger().info("shared_link_node successfully initialized")
+
     # -------------- #
     #      ROS
     # -------------- #
@@ -131,6 +139,8 @@ class SharedLinkNode(Node):
         ros_msg = KairosValues()
         for f in fields(self._inbound):
             sv: SVField = getattr(self._inbound, f.name)
+            if sv.value is None:
+                continue
             ros_field = INBOUND_TO_ROS.get(f.name, f.name) # Swaps for ROS name, or leaves as is if not on list
             setattr(ros_msg, ros_field, sv.value)
         self._kairos_pub.publish(ros_msg)
@@ -153,22 +163,42 @@ class SharedLinkNode(Node):
 
 
     ### SERVICES
-    def _get_vehicle_control_callback(self, request, response: GetVehicleControl.Response):
+    def _get_vehicle_control_callback(self, request: GetVehicleControl.Request, response: GetVehicleControl.Response):
         for f in fields(self._outbound):
             sv: SVField = getattr(self._outbound, f.name)
             if sv.value is not None:
                 setattr(response.control, f.name, sv.value)
         return response
 
-    def _connect_callback(self, request, response: Empty.response):
-        self.sendMsg(declare_myIP_msg)
-        self.sendMsgs(enab_msgs)
-        self.sendMsgs(list_SVs_msgs)
-        self.sendMsg(teleop_start)
-        
-    def _disconnect_callback(self, request, response: Empty.response):
-        self.sendMsg(teleop_start)
-        self.sendMsgs(term_msgs)
+    def _send_msg_set_callback(self, request: SendMsgSet.Request, response: SendMsgSet.Response):
+        match request.msg_set:
+            case SendMsgSet.Request.CONNECT:
+                self.sendMsg(declare_myIP_msg)
+                self.sendMsgs(enab_msgs)
+                self.sendMsgs(list_SVs_msgs)
+                self.sendMsg(teleop_start)
+                self.get_logger().info("Connection Messages Sent")
+            case SendMsgSet.Request.DISCONNECT:
+                self.sendMsg(teleop_stop)
+                self.sendMsgs(term_msgs)
+                self.get_logger().info("Disconnect Messages Sent")
+            case SendMsgSet.Request.PING:
+                self.sendMsg(ping_msg)
+                self.get_logger().info("Ping Sent")
+            case SendMsgSet.Request.FULL_CONNECT:
+                self.sendMsg(declare_myIP_msg)
+                self.sendMsgs(enab_msgs)
+                self.sendMsgs(list_SVs_msgs)
+                self.sendMsgs(add_startup_msgs)
+                self.sendMsgs(add_teleop_start)
+                self.get_logger().info("Connection Messages Sent")
+            case SendMsgSet.Request.FULL_DISCONNECT:
+                self.sendMsgs(add_term_msgs)
+                self.sendMsgs(term_msgs)
+                self.get_logger().info("Disconnect Messages Sent")
+            case _:
+                self.get_logger().warn(f"Unknown msg_set value: {request.msg_set}")
+        return response
 
 
     ### TIMER
@@ -220,16 +250,18 @@ class SharedLinkNode(Node):
                     print(f"Received {split_data[1]} msg")
 
     ### SEND
+
+    # Confirm functionality with 
+    # tcpdump -i wlp3s0 -n 'udp port 4000'
     def send_data(self, delta_only: bool = True):
-        msg = ':BA|N0|'
+        msg = 'N0|'
         for f in fields(self._outbound):
             sv: SVField = getattr(self._outbound, f.name)
             if not delta_only or sv.updated:
-                msg += f'D{sv.value}|'
+                msg += f'|D{sv.value}'
                 sv.updated = False
             else:
-                msg += 'D|'
-        msg += 'C'
+                msg += '|D'
         self.sendMsg(msg)
 
     # -------------- #
@@ -249,7 +281,11 @@ class SharedLinkNode(Node):
     ### Utilities
 
     def sendMsg(self, msg: str) -> None:
-        self._udp.send(self._prep_for_send(msg))
+        msg = self._prep_for_send(msg)
+        ros_msg = String()
+        ros_msg.data = msg
+        self._outbound_pub.publish(ros_msg)
+        self._udp.send(msg)
     
     def sendMsgs(self, msgs: list):
         for msg in msgs:
@@ -259,6 +295,7 @@ class SharedLinkNode(Node):
         return f'{sum(ord(c) for c in s) % 0x100:X}'
     
     def _prep_for_send(self, msg: str) -> str:
+        msg = f":BA|{msg}|C"
         return f"[{msg}{self.get_checksum(msg)}]"
     
 

@@ -10,12 +10,20 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VehicleControl.msg"
   "srv/GetVehicleControl.srv"
   "srv/SetEStopState.srv"
+  "srv/SendMsgSet.srv"
 )
 
+# already called somewhere caused duplicate error
+# ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   shared_link_py/shared_link_node.py
   shared_link_py/template_node.py
   shared_link_py/estop_beacon.py
+  shared_link_py/other_beacons.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES
   shared_link_py/UDPConnection.py
   shared_link_py/premade_msgs.py
   DESTINATION lib/${PROJECT_NAME}

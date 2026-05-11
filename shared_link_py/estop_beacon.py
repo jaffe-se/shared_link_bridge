@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from enum import Enum
 
 import rclpy
@@ -5,12 +7,13 @@ from rclpy.node import Node
 
 from shared_link_py.srv import SetEStopState
 
-from UDPConnection import UdpConnection
+from UDPConnection import UdpSender
 
 
+# ESTOP_BROADCAST_ADDR = '192.168.200.255'
 ESTOP_BROADCAST_ADDR = '255.255.255.255'
-ESTOP_PORT = 7000
-ESTOP_LOCAL_PORT = 7001
+ESTOP_PORT = 7001
+ESTOP_LOCAL_PORT = 7000
 
 class EStopState(Enum):
     ESTOP = 0
@@ -51,9 +54,7 @@ class EStopBeaconNode(Node):
 
         self._state = EStopState.RUN  # CHANGE TO ESTOP AFTER TESTING
 
-        self._udp = UdpConnection(
-            ESTOP_BROADCAST_ADDR, ESTOP_PORT, ESTOP_PORT,
-            broadcast=True)
+        self._udp = UdpSender(ESTOP_BROADCAST_ADDR, ESTOP_PORT, local_port=ESTOP_LOCAL_PORT, broadcast=True)
 
         self._set_state_srv = self.create_service(
             SetEStopState, 'set_estop_state',
@@ -62,9 +63,11 @@ class EStopBeaconNode(Node):
         # Rule 1: transmit 1 per second
         self._beacon_timer = self.create_timer(1.0, self._beacon_timer_cb)
 
+        self.get_logger().info(f"EStop beacon initialized in {self._state} mode")
+
     def _set_state_callback(self, request: SetEStopState.Request, response: SetEStopState.Response):
         self._state = EStopState(request.state)
-        self._send_beacon()  # Rule 3: send immediately on state change
+        self._send_beacon()  # send immediately on state change
         self.get_logger().info(f'EStop state set to {self._state.name}')
         return response
 
@@ -72,7 +75,11 @@ class EStopBeaconNode(Node):
         self._send_beacon()
 
     def _send_beacon(self):
-        self._udp.send_bytes(_STATE_TO_PKT[self._state])
+        try:
+            for _ in range(3):
+                self._udp.send_bytes(_STATE_TO_PKT[self._state])
+        except OSError as e:
+            self.get_logger().warn(f"Beacon send failed: {e}")
 
 
 def main(args=None):
