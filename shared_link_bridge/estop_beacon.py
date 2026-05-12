@@ -5,7 +5,7 @@ from enum import Enum
 import rclpy
 from rclpy.node import Node
 
-from shared_link_py.srv import SetEStopState
+from shared_link_bridge.srv import SetEStopState
 
 from UDPConnection import UdpSender
 

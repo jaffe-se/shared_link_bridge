@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(shared_link_py)
+project(shared_link_bridge)
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
@@ -10,22 +10,22 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VehicleControl.msg"
   "srv/GetVehicleControl.srv"
   "srv/SetEStopState.srv"
-  "srv/SendMsgSet.srv"
+  "srv/ExecCmd.srv"
+  "srv/FieldUpdate.srv"
 )
 
 # already called somewhere caused duplicate error
 # ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
-  shared_link_py/shared_link_node.py
-  shared_link_py/template_node.py
-  shared_link_py/estop_beacon.py
-  shared_link_py/other_beacons.py
+  shared_link_bridge/shared_link_bridge_node.py
+  shared_link_bridge/keyboard_teleop.py
+  shared_link_bridge/estop_beacon.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(FILES
-  shared_link_py/UDPConnection.py
-  shared_link_py/premade_msgs.py
+  shared_link_bridge/UDPConnection.py
+  shared_link_bridge/premade_msgs.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

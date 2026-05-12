@@ -24,7 +24,7 @@ list_SVs_msgs = [
     "MW",
     "ML"
 ]
-
+# ^^^^^
 # Should respond with something like
 # [:AB|N0|Rvideo_mux1|D0|Rveh_start|D0|Rveh_enable|D0|Rveh_motion|D0|Rjoy_steer|D0|Rveh_steer|D0|Rveh_brake|D100|Rveh_throttle|D0|Rveh_shift|D0|Rveh_clutch|D0|C92]
 # Not sure if it'll also have that for the quires for KAIROS's outbound variables too 
@@ -40,40 +40,3 @@ pong_msg = "G0"
 
 teleop_start = "EServoPod|D0,TELEOP START"
 teleop_stop = "EServoPod|D0,TELEOP STOP"
-
-add_term_msgs = [
-    "EPhysics|D0,Stop",
-    "EServoPod|D108, 0",
-    teleop_stop
-]
-
-add_startup_msgs = [
-    "\nNO CARRIER"
-]
-
-add_teleop_start = [
-    "EPhysics|D0,Use ServoPod",
-    "EPhysics|D0,Rddf,***********************************",
-    teleop_start,
-    "EPhysics|D0,Start",
-    "EServoPod|D108, 1"
-]
-
-beacon_msg = "|".join([
-    "rubicon",
-    LOCAL_IP,
-    "VEH_NorthEastern1",
-    "Shepherd_OCU",
-    "",
-    "0",
-    "0",
-    "0",
-    "0",
-    "",
-    "0.0.0.0",
-    "10-10-2010",
-    "10:10:10",
-    ""
-])
-
-SL_beacon_to_7005 = "[:BA|N0|T4|QVehicleName|DVEH_NorthEastern1|T4|QAutoGpsLat|D0|T4|QAutoGpsLon|D0|T4|QAutoGpsHead|D0|T4|QAutoGpsVel|D0|T4|Qvehicle_bat|D11.8|T4|Qcomputer_bat|D|T4|Qsvp_init|D0|T4|Qsvp_enb_eng|D|T4|Qsvp_start_eng|D0|T4|Qsvp_detether|D|T4|Qpause|D0|T4|Qkey_on|D1|T4|Qs_lights|D0|T4|Qenc2|D0|T4|Qthrottle|D0|T4|Qbbrake|D100|T4|Qfbrake|D0|T4|Qveh_gear|D1|C6E]"

@@ -7,8 +7,8 @@ from dataclasses import dataclass, field, fields
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
-from shared_link_py.msg import KairosValues, VehicleControl
-from shared_link_py.srv import GetVehicleControl, SendMsgSet
+from shared_link_bridge.msg import KairosValues, VehicleControl
+from shared_link_bridge.srv import GetVehicleControl, ExecCmd, FieldUpdate
 
 from UDPConnection import UdpConnection
 from premade_msgs import *
@@ -24,6 +24,15 @@ class SVField:
     type: int  # 0=long, 2=double, 4=string
     value: Union[int, float, str, None] = None
     updated: bool = False
+
+    def __post_init__(self):
+        if self.value is None:
+            if self.type == TYPE.INT:
+                self.value = 0
+            elif self.type == TYPE.FLOAT:
+                self.value = 0.0
+            elif self.type == TYPE.STRING:
+                self.value = ""
 
     def apply(self, raw: str):
         """Parse a raw D field string and apply it to this variable."""
@@ -47,7 +56,7 @@ class SharedLinkOutbound:
     veh_motion:   SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
     joy_steer:    SVField = field(default_factory=lambda: SVField(type=TYPE.FLOAT))
     veh_steer:    SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
-    veh_brake:    SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
+    veh_brake:    SVField = field(default_factory=lambda: SVField(type=TYPE.INT, value=100))
     veh_throttle: SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
     veh_shift:    SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
     veh_clutch:   SVField = field(default_factory=lambda: SVField(type=TYPE.INT))
@@ -99,7 +108,7 @@ INBOUND_TO_ROS = {
 
 class SharedLinkNode(Node):
     def __init__(self):
-        super().__init__('shared_link_node')
+        super().__init__('shared_link_bridge_node')
         self._update_rate = 0.1  # seconds (100ms)
         self._outbound = SharedLinkOutbound()
         self._inbound = SharedLinkInbound()
@@ -109,27 +118,32 @@ class SharedLinkNode(Node):
 
         self._outbound_pub = self.create_publisher(String, 'outbound_msgs', 10)
 
-        self._get_ctrl_srv = self.create_service(
-            GetVehicleControl, 'get_vehicle_control',
-            self._get_vehicle_control_callback)
-        
-        self._send_msg_set_srv = self.create_service(
-            SendMsgSet, 'send_msg_set',
-            self._send_msg_set_callback)
-
         self._vehicle_ctrl_sub = self.create_subscription(
             VehicleControl, 'vehicle_control',
             self._vehicle_control_callback, 10)
 
-        self._field_update_sub = self.create_subscription(
-            String, 'field_update',
-            self._field_update_callback, 10)
+        self._get_ctrl_srv = self.create_service(
+            GetVehicleControl, 'get_vehicle_control',
+            self._get_vehicle_control_callback)
+        
+        self._exec_cmd_srv = self.create_service(
+            ExecCmd, 'exec_cmd',
+            self._exec_cmd_callback)
+
+        self._field_update_srv = self.create_service(
+            FieldUpdate, 'field_update',
+            self._field_update_callback)
 
         self._update_timer = self.create_timer(self._update_rate, self._timer_callback)
-
         self._inbound_count = 0
 
-        self.get_logger().info("shared_link_node successfully initialized")
+        self._connect()
+
+        self.get_logger().info("shared_link_bridge_node successfully initialized")
+
+    def __del__(self):
+        self._disconnect()
+        self._udp.stop()
 
     # -------------- #
     #      ROS
@@ -150,18 +164,8 @@ class SharedLinkNode(Node):
         for f in fields(self._outbound):
             sv: SVField = getattr(self._outbound, f.name)
             sv.apply(str(getattr(msg, f.name)))
-
-    def _field_update_callback(self, msg: String):
-        raw = msg.data
-        if ':' not in raw:
-            return
-        name, value_str = raw.split(':', 1)
-        sv = self.get_outbound_field(name)
-        if sv is None:
-            return
-        sv.apply(value_str)
-
-
+        self.send_data()
+        
     ### SERVICES
     def _get_vehicle_control_callback(self, request: GetVehicleControl.Request, response: GetVehicleControl.Response):
         for f in fields(self._outbound):
@@ -170,36 +174,34 @@ class SharedLinkNode(Node):
                 setattr(response.control, f.name, sv.value)
         return response
 
-    def _send_msg_set_callback(self, request: SendMsgSet.Request, response: SendMsgSet.Response):
+    def _exec_cmd_callback(self, request: ExecCmd.Request, response: ExecCmd.Response):
         match request.msg_set:
-            case SendMsgSet.Request.CONNECT:
-                self.sendMsg(declare_myIP_msg)
-                self.sendMsgs(enab_msgs)
-                self.sendMsgs(list_SVs_msgs)
-                self.sendMsg(teleop_start)
-                self.get_logger().info("Connection Messages Sent")
-            case SendMsgSet.Request.DISCONNECT:
-                self.sendMsg(teleop_stop)
-                self.sendMsgs(term_msgs)
-                self.get_logger().info("Disconnect Messages Sent")
-            case SendMsgSet.Request.PING:
+            case ExecCmd.Request.CONNECT:
+                self._connect()
+            case ExecCmd.Request.DISCONNECT:
+                self._disconnect()
+            case ExecCmd.Request.TELEOP_START:
+                self._teleop_start()
+            case ExecCmd.Request.TELEOP_STOP:
+                self._teleop_stop()
+            case ExecCmd.Request.PING:
                 self.sendMsg(ping_msg)
                 self.get_logger().info("Ping Sent")
-            case SendMsgSet.Request.FULL_CONNECT:
-                self.sendMsg(declare_myIP_msg)
-                self.sendMsgs(enab_msgs)
-                self.sendMsgs(list_SVs_msgs)
-                self.sendMsgs(add_startup_msgs)
-                self.sendMsgs(add_teleop_start)
-                self.get_logger().info("Connection Messages Sent")
-            case SendMsgSet.Request.FULL_DISCONNECT:
-                self.sendMsgs(add_term_msgs)
-                self.sendMsgs(term_msgs)
-                self.get_logger().info("Disconnect Messages Sent")
             case _:
                 self.get_logger().warn(f"Unknown msg_set value: {request.msg_set}")
         return response
 
+    def _field_update_callback(self, request: FieldUpdate.Request, response: FieldUpdate.Response):
+        sv = self.get_outbound_field(request.name)
+        if sv is None:
+            response.success = False
+            return response
+        sv.apply(request.value)
+
+        self.send_data()
+
+        response.success = True        
+        return response
 
     ### TIMER
     def _timer_callback(self):
@@ -267,19 +269,35 @@ class SharedLinkNode(Node):
     # -------------- #
     #    INTERNALS
     # -------------- #
+    ### COMMANDS
+    def _connect(self):
+        self.sendMsg(declare_myIP_msg)
+        self.sendMsgs(enab_msgs)
+        self.sendMsgs(list_SVs_msgs)
+        self.get_logger().info("Connection Messages Sent")
+        
+    def _disconnect(self):
+        self._teleop_stop()
+        self.sendMsgs(term_msgs)
+        self.get_logger().info("Disconnect Messages Sent")
+
+    def _teleop_start(self):
+        self.sendMsg(teleop_start)
+        self.get_logger().info("Teleop START Messages Sent")
+
+    def _teleop_stop(self):
+        self.sendMsg(teleop_stop)
+        self.get_logger().info("Teleop STOP Messages Sent")
+
+
+    ### BRIDGE TO INTERNAL REP
     def _apply_inbound_data(self, d_fields: list[str]):
         for i, f in enumerate(fields(self._inbound)):
             sv: SVField = getattr(self._inbound, f.name)
             sv.apply(d_fields[i][1:])  # strip leading 'D'
         self._publish_kairos_values()
 
-    def get_outbound_field(self, name: str) -> SVField | None:
-        if hasattr(self._outbound, name):
-            return getattr(self._outbound, name)
-        return None
-
-    ### Utilities
-
+    ### SEND MSG + HELPERS
     def sendMsg(self, msg: str) -> None:
         msg = self._prep_for_send(msg)
         ros_msg = String()
@@ -297,6 +315,12 @@ class SharedLinkNode(Node):
     def _prep_for_send(self, msg: str) -> str:
         msg = f":BA|{msg}|C"
         return f"[{msg}{self.get_checksum(msg)}]"
+    
+    # ACCESS
+    def get_outbound_field(self, name: str) -> SVField | None:
+        if hasattr(self._outbound, name):
+            return getattr(self._outbound, name)
+        return None
     
 
 

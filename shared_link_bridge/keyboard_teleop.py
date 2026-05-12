@@ -7,18 +7,22 @@ import threading
 
 import rclpy
 from rclpy.node import Node
-from shared_link_py.msg import KairosValues, VehicleControl
-from shared_link_py.srv import GetVehicleControl, SendMsgSet
+from shared_link_bridge.msg import KairosValues, VehicleControl
+from shared_link_bridge.srv import GetVehicleControl, ExecCmd, FieldUpdate
 
 
 KEYS = {
     'e': 'start',
     'w': 'forward',
     's': 'brake',
-    'k': 'connect',
-    'l': 'disconnect',
-    'n': 'full_connect',
-    'm': 'full_disconnect',
+    'a': 'left',
+    'd': 'right',
+    'u': 'connect',
+    'i': 'disconnect',
+    'j': 'teleop_start',
+    'k': 'teleop_stop',
+    'n': 'start',
+    'm': 'stop',
     'p': 'ping'
 }
 
@@ -30,9 +34,10 @@ class TemplateNode(Node):
         self._cmd = VehicleControl()
 
         self._get_ctrl_client = self.create_client(GetVehicleControl, 'get_vehicle_control')
-        self._send_msg_set_client = self.create_client(SendMsgSet, 'send_msg_set')
+        self._exec_cmd_client = self.create_client(ExecCmd, 'exec_cmd')
+        self._field_update_client = self.create_client(FieldUpdate, 'field_update')
 
-        # Waiting for get_vehicle_control service (waits for shared_link_node)
+        # Waiting for get_vehicle_control service (waits for shared_link_bridge_node)
         while not self._get_ctrl_client.wait_for_service(timeout_sec=5.0):
             self.get_logger().info('Waiting for get_vehicle_control service...')
         future = self._get_ctrl_client.call_async(GetVehicleControl.Request())
@@ -65,7 +70,15 @@ class TemplateNode(Node):
         self._ctrl_pub.publish(self._cmd)
 
     def start(self):
+        # Technically veh_enable can be set to 1 perminently
+        # The veh_motion is supposed to be the deadman's switch
         self._cmd.veh_motion = 1
+        self._cmd.veh_enable = 1
+        self._publish()
+
+    def stop(self):
+        self._cmd.veh_motion = 0
+        self._cmd.veh_enable = 0
         self._publish()
 
     def forward(self):
@@ -78,30 +91,44 @@ class TemplateNode(Node):
         self._cmd.veh_throttle = 0
         self._publish()
 
+    def right(self):
+        self._cmd.joy_steer -= 10
+        self._publish()
+
+    def left(self):
+        self._cmd.joy_steer -= -10
+        self._publish()
+
     def connect(self):
-        req = SendMsgSet.Request()
-        req.msg_set = SendMsgSet.Request.CONNECT
-        self._send_msg_set_client.call_async(req)
+        req = ExecCmd.Request()
+        req.msg_set = ExecCmd.Request.CONNECT
+        self._exec_cmd_client.call_async(req)
 
     def disconnect(self):
-        req = SendMsgSet.Request()
-        req.msg_set = SendMsgSet.Request.DISCONNECT
-        self._send_msg_set_client.call_async(req)
+        req = ExecCmd.Request()
+        req.msg_set = ExecCmd.Request.DISCONNECT
+        self._exec_cmd_client.call_async(req)
 
-    def full_disconnect(self):
-        req = SendMsgSet.Request()
-        req.msg_set = SendMsgSet.Request.FULL_DISCONNECT
-        self._send_msg_set_client.call_async(req)
+    def teleop_start(self):
+        req = ExecCmd.Request()
+        req.msg_set = ExecCmd.Request.TELEOP_START
+        self._exec_cmd_client.call_async(req)
 
-    def full_connect(self):
-        req = SendMsgSet.Request()
-        req.msg_set = SendMsgSet.Request.FULL_CONNECT
-        self._send_msg_set_client.call_async(req)
+    def teleop_stop(self):
+        req = ExecCmd.Request()
+        req.msg_set = ExecCmd.Request.TELEOP_STOP
+        self._exec_cmd_client.call_async(req)
 
     def ping(self):
-        req = SendMsgSet.Request()
-        req.msg_set = SendMsgSet.Request.PING
-        self._send_msg_set_client.call_async(req)
+        req = ExecCmd.Request()
+        req.msg_set = ExecCmd.Request.PING
+        self._exec_cmd_client.call_async(req)
+
+    def field_update(self, name: str, value):
+        req = FieldUpdate.Request()
+        req.name = name
+        req.value = str(value)
+        self._field_update_client.call_async(req)
 
     # -------------- #
     #    Keyboard
