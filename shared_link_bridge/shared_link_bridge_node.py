@@ -175,7 +175,7 @@ class SharedLinkNode(Node):
         return response
 
     def _exec_cmd_callback(self, request: ExecCmd.Request, response: ExecCmd.Response):
-        match request.msg_set:
+        match request.cmd:
             case ExecCmd.Request.CONNECT:
                 self._connect()
             case ExecCmd.Request.DISCONNECT:
@@ -188,7 +188,7 @@ class SharedLinkNode(Node):
                 self.sendMsg(ping_msg)
                 self.get_logger().info("Ping Sent")
             case _:
-                self.get_logger().warn(f"Unknown msg_set value: {request.msg_set}")
+                self.get_logger().warn(f"Unknown cmd value: {request.cmd}")
         return response
 
     def _field_update_callback(self, request: FieldUpdate.Request, response: FieldUpdate.Response):

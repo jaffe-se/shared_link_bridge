@@ -19,6 +19,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 install(PROGRAMS
   shared_link_bridge/shared_link_bridge_node.py
   shared_link_bridge/keyboard_teleop.py
+  shared_link_bridge/controller_teleop.py
   shared_link_bridge/estop_beacon.py
   DESTINATION lib/${PROJECT_NAME}
 )
