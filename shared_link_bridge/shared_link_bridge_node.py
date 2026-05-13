@@ -109,7 +109,8 @@ INBOUND_TO_ROS = {
 class SharedLinkNode(Node):
     def __init__(self):
         super().__init__('shared_link_bridge_node')
-        self._update_rate = 0.1  # seconds (100ms)
+        self.declare_parameter('update_rate', 0.05)
+        self._update_rate = self.get_parameter('update_rate').value
         self._outbound = SharedLinkOutbound()
         self._inbound = SharedLinkInbound()
         self._udp = UdpConnection(KAIROS_IP, KAIROS_PORT, LOCAL_PORT, self._msg_parser)
@@ -164,7 +165,7 @@ class SharedLinkNode(Node):
         for f in fields(self._outbound):
             sv: SVField = getattr(self._outbound, f.name)
             sv.apply(str(getattr(msg, f.name)))
-        self.send_data()
+        # self.send_data()
         
     ### SERVICES
     def _get_vehicle_control_callback(self, request: GetVehicleControl.Request, response: GetVehicleControl.Response):
