@@ -27,6 +27,7 @@ install(PROGRAMS
 install(FILES
   shared_link_bridge/UDPConnection.py
   shared_link_bridge/premade_msgs.py
+  shared_link_bridge/tui.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
