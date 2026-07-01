@@ -2,12 +2,31 @@
 # Command I used was
 # sudo ifconfig en0 alias 192.168.200.50 255.255.255.0
 
+import socket
+
 KAIROS_IP = "192.168.200.220"
 
 KAIROS_PORT = 4000
 LOCAL_PORT = 4220
 
-LOCAL_IP = "192.168.200.10"
+
+def get_local_ip(target_ip=KAIROS_IP, target_port=KAIROS_PORT):
+    """Determine the local IP of the interface that routes to KAIROS.
+
+    Opens a UDP socket "connected" to KAIROS (no packets are actually sent)
+    so the OS picks the correct source interface, then reads back its address.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((target_ip, target_port))
+        IP = s.getsockname()[0]
+        print(f"Detected IP: {IP}")
+        return IP
+    finally:
+        s.close()
+
+
+LOCAL_IP = get_local_ip()
 
 declare_myIP_msg = f"ELink|D0, SetIP, {LOCAL_IP}:{LOCAL_PORT}, 4000"
 
