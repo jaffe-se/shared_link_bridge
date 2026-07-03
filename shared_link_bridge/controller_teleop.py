@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 
 import atexit
+import os
 import time
 from collections import deque
+
+import yaml
+from ament_index_python.packages import get_package_share_directory
 
 import rclpy
 from rclpy.node import Node
@@ -58,11 +62,11 @@ class AXIS(Enum):
 
 
 BUTTONS = {
-    BUTTON.B:     'stop',
-    BUTTON.LB:    'connect',
-    BUTTON.BACK:  'teleop_stop',
-    BUTTON.START: 'teleop_start',
-    BUTTON.LOGI:  'ping',
+    # BUTTON.B:     'stop',
+    # BUTTON.LB:    'connect',
+    # BUTTON.BACK:  'teleop_stop',
+    # BUTTON.START: 'teleop_start',
+    BUTTON.LOGI:  'ping'
 }
 
 # A is reserved for the TUI as the "select" button.
@@ -77,12 +81,18 @@ STEER_BOOST_BUTTON = BUTTON.RJ     # held -> boosted steering scale
 THROTTLE_AXIS = AXIS.LY   # positive forward, negative brake
 STEER_AXIS = AXIS.RX
 
-# Default and boosted scales.
-THROTTLE_SCALE = 100
-THROTTLE_SCALE_BOOSTED = 800    # 1000 is true max
-STEER_SCALE = 100.0
-STEER_SCALE_BOOSTED = 400.0     # 450 is true max
-BRAKE_MAX = 100                 # 100 is max
+# Default and boosted scales. Loaded from config/controller_teleop.yaml.
+_config_path = os.path.join(
+    get_package_share_directory('shared_link_bridge'),
+    'config', 'controller_teleop.yaml')
+with open(_config_path) as _f:
+    _scales = yaml.safe_load(_f)['scales']
+
+THROTTLE_SCALE = _scales['throttle_scale']
+THROTTLE_SCALE_BOOSTED = _scales['throttle_scale_boosted']
+STEER_SCALE = _scales['steer_scale']
+STEER_SCALE_BOOSTED = _scales['steer_scale_boosted']
+BRAKE_MAX = _scales['brake_max']
 
 
 class ShiftPosition(Enum):

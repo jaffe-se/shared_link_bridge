@@ -1,0 +1,7 @@
+# Default and boosted scales. Can have different boosted scales if you want more fine controls.
+scales:
+  throttle_scale: 1000
+  throttle_scale_boosted: 1000    # 1000 is true max
+  steer_scale: 400.0
+  steer_scale_boosted: 400.0      # 450 is true max
+  brake_max: 100                  # 100 is max
